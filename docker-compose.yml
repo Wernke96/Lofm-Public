@@ -1,0 +1,106 @@
+version: '3'
+services:
+
+  #PHP Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: lofm/php:8.0-fpm
+    container_name: app
+    restart: unless-stopped
+    tty: true
+    environment:
+      CONTAINER_ROLE: app
+      SERVICE_NAME: app
+      SERVICE_TAGS: dev
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    links: 
+      - redis
+    networks:
+      - app-network
+
+  #Nginx Service
+  webserver:
+    image: nginx:alpine
+    container_name: webserver
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./:/var/www
+      - ./nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - app-network
+
+  scheduler:
+    image: lofm/php:8.0-fpm
+    container_name: scheduler
+    restart: unless-stopped
+    working_dir: /var/www
+    depends_on: 
+      - app
+    volumes:
+      - ./:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    environment:
+      CONTAINER_ROLE: scheduler
+    networks:
+      - app-network
+
+  queue:
+    image: lofm/php:8.0-fpm
+    container_name: queue
+    restart: unless-stopped
+    working_dir: /var/www
+    environment:
+      CONTAINER_ROLE: queue
+    depends_on: 
+      - app
+    volumes:
+      - ./:/var/www
+      - ./php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - app-network
+
+  #MySQL Service
+  db:
+    image: mongo
+    container_name: db
+    restart: unless-stopped
+    tty: true
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_DATABASE: Lofm
+    volumes:
+      - dbdata:/data/db
+    networks:
+      - app-network
+  
+  redis:
+    image: redis
+    container_name: redis
+    restart: unless-stopped
+    tty: true
+    ports: 
+      - 6379:6379
+    networks:
+      - app-network  
+    
+
+
+
+#Docker Networks
+networks:
+  app-network:
+    driver: bridge
+#Volumes
+volumes:
+  dbdata:
+    driver: local
